@@ -208,9 +208,9 @@ def insertImage(*args, **kwargs):
         keep_proportion: (bool) whether to maintain aspect ratio
         overlay: (bool) put in foreground
     """
-    if len(args) != 2:
-        raise ValueError("bad number of positional parameters")
-    page, rect = args
+
+    page = args[0]
+    rect=kwargs.get("rect")
     filename = kwargs.get("filename")
     pixmap = kwargs.get("pixmap")
     stream = kwargs.get("stream")
@@ -316,31 +316,32 @@ def insertImage(*args, **kwargs):
     # to the actual C-level function (_imgpointer), and set all other
     # parameters to None.
     # -------------------------------------------------------------------------
+    
+    if pixmap:  # this is the easy case
+        w = pixmap.width
+        h = pixmap.height
+        digest = calc_hash(pixmap.samples)
+
+    elif stream:  # use tool to access the information
+        # we also pass through the generated fz_image address
+        if type(stream) is io.BytesIO:
+            stream = stream.getvalue()
+        img_prof = TOOLS.image_profile(stream, keep_image=True)
+        w, h = img_prof["width"], img_prof["height"]
+        digest = calc_hash(stream)
+        stream = None  # make sure this arg is NOT used
+        _imgpointer = img_prof["image"]  # pointer to fz_image
+
+    else:  # worst case: must read the file
+        stream = open(filename, "rb").read()
+        digest = calc_hash(stream)
+        img_prof = TOOLS.image_profile(stream, keep_image=True)
+        w, h = img_prof["width"], img_prof["height"]
+        stream = None  # make sure this arg is NOT used
+        filename = None  # make sure this arg is NOT used
+        _imgpointer = img_prof["image"]  # pointer to fz_image
+        
     if keep_proportion is True:  # for this we need the image dimension
-        if pixmap:  # this is the easy case
-            w = pixmap.width
-            h = pixmap.height
-            digest = calc_hash(pixmap.samples)
-
-        elif stream:  # use tool to access the information
-            # we also pass through the generated fz_image address
-            if type(stream) is io.BytesIO:
-                stream = stream.getvalue()
-            img_prof = TOOLS.image_profile(stream, keep_image=True)
-            w, h = img_prof["width"], img_prof["height"]
-            digest = calc_hash(stream)
-            stream = None  # make sure this arg is NOT used
-            _imgpointer = img_prof["image"]  # pointer to fz_image
-
-        else:  # worst case: must read the file
-            stream = open(filename, "rb").read()
-            digest = calc_hash(stream)
-            img_prof = TOOLS.image_profile(stream, keep_image=True)
-            w, h = img_prof["width"], img_prof["height"]
-            stream = None  # make sure this arg is NOT used
-            filename = None  # make sure this arg is NOT used
-            _imgpointer = img_prof["image"]  # pointer to fz_image
-
         maxf = max(w, h)
         fw = w / maxf
         fh = h / maxf
@@ -2870,7 +2871,7 @@ class Shape(object):
         if cnt < 4:
             raise ValueError("points too close")
         mb = rad / cnt  # revised breadth
-        matrix = TOOLS._hor_matrix(p1, p2)  # normalize line to x-axis
+        matrix = Matrix(TOOLS._hor_matrix(p1, p2))  # normalize line to x-axis
         i_mat = ~matrix  # get original position
         points = []  # stores edges
         for i in range(1, cnt):
