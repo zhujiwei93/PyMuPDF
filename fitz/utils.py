@@ -1104,7 +1104,7 @@ def setToC(doc, toc, collapse=1):
         if i == 0:  # special: this is the outline root
             txt += "/Type/Outlines"  # so add the /Type entry
         txt += ">>"
-        doc._updateObject(xref[i], txt)  # insert the PDF object
+        doc.updateObject(xref[i], txt)  # insert the PDF object
 
     doc.initData()
     return toclen
